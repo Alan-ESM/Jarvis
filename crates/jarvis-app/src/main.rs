@@ -23,6 +23,40 @@ const INPUT_ID: &str = "jarvis-composer-input";
 const MODELS: [&str; 5] = ["Flash", "X", "Ultra", "GPT-5", "OpenAI compatible"];
 const ACCESS_LEVELS: [&str; 3] = ["Intermediaire", "Illimite", "Desactive"];
 const MAX_UPLOAD_BYTES: u64 = 100 * 1024 * 1024;
+const WINDOW_SIZE: [f32; 2] = [1440.0, 900.0];
+const MIN_WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
+const SIDEBAR_WIDTH: f32 = 320.0;
+const TOPBAR_HEIGHT: f32 = 64.0;
+const COMPOSER_HEIGHT: f32 = 92.0;
+const COMPOSER_ATTACHMENTS_HEIGHT: f32 = 140.0;
+const CONTENT_MAX_WIDTH: f32 = 1120.0;
+const GLOBAL_PADDING: f32 = 24.0;
+
+mod theme {
+    use eframe::egui::Color32;
+
+    pub const BG: Color32 = Color32::from_rgb(10, 11, 13);
+    pub const PANEL: Color32 = Color32::from_rgb(17, 20, 24);
+    pub const SURFACE: Color32 = Color32::from_rgb(22, 26, 31);
+    pub const ACTIVE: Color32 = Color32::from_rgb(28, 33, 40);
+    pub const KHAKI_DARK: Color32 = Color32::from_rgb(94, 102, 82);
+    pub const KHAKI_LIGHT: Color32 = Color32::from_rgb(125, 138, 106);
+    pub const GOLD: Color32 = Color32::from_rgb(184, 154, 90);
+    pub const GOLD_HOVER: Color32 = Color32::from_rgb(210, 180, 111);
+    pub const TEXT: Color32 = Color32::from_rgb(234, 229, 216);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(168, 163, 154);
+    pub const TEXT_FAINT: Color32 = Color32::from_rgb(111, 116, 109);
+    pub const ONLINE: Color32 = Color32::from_rgb(142, 174, 112);
+    pub const OFFLINE: Color32 = Color32::from_rgb(172, 104, 86);
+
+    pub fn border() -> Color32 {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+    }
+
+    pub fn border_active() -> Color32 {
+        Color32::from_rgba_unmultiplied(210, 180, 111, 130)
+    }
+}
 
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt()
@@ -31,8 +65,8 @@ fn main() -> Result<(), eframe::Error> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1180.0, 740.0])
-            .with_min_inner_size([900.0, 600.0])
+            .with_inner_size(WINDOW_SIZE)
+            .with_min_inner_size(MIN_WINDOW_SIZE)
             .with_title("Jarvis")
             .with_icon(load_icon_data()),
         ..Default::default()
@@ -445,22 +479,22 @@ impl eframe::App for JarvisUi {
 
         egui::SidePanel::left("sidebar")
             .resizable(false)
-            .default_width(238.0)
+            .default_width(SIDEBAR_WIDTH)
             .show(ctx, |ui| draw_sidebar(ui, self));
 
         egui::TopBottomPanel::top("topbar")
             .resizable(false)
-            .exact_height(64.0)
+            .exact_height(TOPBAR_HEIGHT)
             .show(ctx, |ui| draw_topbar(ui, self));
 
         egui::TopBottomPanel::bottom("composer")
             .resizable(false)
             .exact_height(if self.uploaded_files.is_empty() {
-                140.0
+                COMPOSER_HEIGHT
             } else {
-                178.0
+                COMPOSER_ATTACHMENTS_HEIGHT
             })
-            .show(ctx, |ui| draw_composer(ui, self));
+            .show(ctx, |ui| draw_composer_spec(ui, self));
 
         egui::CentralPanel::default().show(ctx, |ui| draw_workspace(ui, self));
     }
@@ -620,15 +654,34 @@ fn circular_logo_rgba(size: u32) -> Vec<u8> {
 fn configure_style(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     style.visuals.dark_mode = true;
-    style.visuals.window_fill = Color32::from_rgb(9, 11, 18);
-    style.visuals.panel_fill = Color32::from_rgb(9, 11, 18);
-    style.visuals.extreme_bg_color = Color32::from_rgb(6, 8, 13);
-    style.visuals.faint_bg_color = Color32::from_rgb(23, 27, 37);
-    style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(30, 35, 45);
-    style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(41, 56, 72);
-    style.visuals.widgets.active.bg_fill = Color32::from_rgb(31, 117, 147);
-    style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::from_rgb(205, 246, 255));
-    style.visuals.override_text_color = Some(Color32::from_rgb(232, 241, 248));
+    style.visuals.window_fill = theme::BG;
+    style.visuals.panel_fill = theme::BG;
+    style.visuals.extreme_bg_color = theme::BG;
+    style.visuals.faint_bg_color = theme::SURFACE;
+    style.visuals.widgets.inactive.bg_fill = theme::SURFACE;
+    style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(33, 38, 44);
+    style.visuals.widgets.active.bg_fill = theme::ACTIVE;
+    style.visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, theme::TEXT);
+    style.visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, theme::TEXT);
+    style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, theme::GOLD_HOVER);
+    style.visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(184, 154, 90, 80);
+    style.visuals.selection.stroke = Stroke::new(1.0, theme::GOLD_HOVER);
+    style.visuals.override_text_color = Some(theme::TEXT);
+    style.spacing.item_spacing = Vec2::new(10.0, 10.0);
+    style.spacing.button_padding = Vec2::new(16.0, 10.0);
+    style.spacing.menu_margin = egui::Margin::symmetric(12.0, 10.0);
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, FontId::proportional(20.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Body, FontId::proportional(16.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, FontId::proportional(16.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, FontId::proportional(12.0));
     ctx.set_style(style);
 }
 
@@ -636,8 +689,9 @@ fn draw_portal(ui: &mut egui::Ui, app: &mut JarvisUi) {
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
     let elapsed = app.portal_started.elapsed().as_secs_f32();
-    painter.rect_filled(rect, 0.0, Color32::from_rgb(233, 245, 248));
-    draw_light_aurora(&painter, rect, elapsed);
+    painter.rect_filled(rect, 0.0, theme::BG);
+    draw_dark_aurora(&painter, rect, elapsed);
+    draw_geometric_field(&painter, rect, elapsed);
 
     let center = rect.center() + Vec2::new(0.0, -32.0);
     let progress = (elapsed / 3.0).clamp(0.0, 1.0);
@@ -649,16 +703,16 @@ fn draw_portal(ui: &mut egui::Ui, app: &mut JarvisUi) {
     painter.circle_filled(
         center,
         radius,
-        Color32::from_rgba_unmultiplied(255, 202, 118, (52.0 + 78.0 * gold) as u8),
+        Color32::from_rgba_unmultiplied(210, 180, 111, (46.0 + 82.0 * gold) as u8),
     );
-    painter.circle_filled(center, 10.0 + gold * 8.0, Color32::from_rgb(255, 228, 168));
+    painter.circle_filled(center, 10.0 + gold * 8.0, theme::GOLD_HOVER);
 
     painter.text(
         Pos2::new(center.x, rect.bottom() - 142.0),
         egui::Align2::CENTER_CENTER,
         "JARVIS",
         FontId::proportional(40.0),
-        Color32::from_rgb(18, 70, 102),
+        theme::TEXT,
     );
 
     let button_rect = Rect::from_center_size(
@@ -671,9 +725,10 @@ fn draw_portal(ui: &mut egui::Ui, app: &mut JarvisUi) {
             egui::Button::new(
                 RichText::new("✨ Entrer dans Jarvis")
                     .strong()
-                    .color(Color32::from_rgb(244, 254, 255)),
+                    .color(theme::BG),
             )
-            .fill(Color32::from_rgb(20, 116, 152))
+            .fill(theme::GOLD)
+            .stroke(Stroke::new(1.0, theme::GOLD_HOVER))
             .rounding(egui::Rounding::same(24.0)),
         )
         .on_hover_text("Ouvrir l'interface Jarvis");
@@ -683,24 +738,20 @@ fn draw_portal(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_sidebar(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    draw_aurora_background(
-        ui,
-        app.app_started.elapsed().as_secs_f32(),
-        Color32::from_rgb(15, 18, 26),
-    );
-    ui.add_space(14.0);
+    draw_aurora_background(ui, app.app_started.elapsed().as_secs_f32(), theme::PANEL);
+    ui.add_space(20.0);
     ui.horizontal(|ui| {
-        draw_logo_mark(ui, &app.logo, 50.0, app.app_started.elapsed().as_secs_f32());
+        draw_logo_mark(ui, &app.logo, 62.0, app.app_started.elapsed().as_secs_f32());
         ui.vertical(|ui| {
-            ui.label(RichText::new("Jarvis").size(22.0).strong());
+            ui.label(RichText::new("Jarvis").size(28.0).strong());
             ui.label(
                 RichText::new("Agent desktop Windows")
-                    .size(12.0)
+                    .size(14.0)
                     .color(mut_text()),
             );
         });
     });
-    ui.add_space(18.0);
+    ui.add_space(24.0);
 
     sidebar_action(ui, "📝 Nouveau clavardage", "Ctrl+N", || app.new_chat());
     if nav_button(
@@ -740,12 +791,12 @@ fn draw_sidebar(ui: &mut egui::Ui, app: &mut JarvisUi) {
         app.active_panel = Panel::Logs;
     }
 
-    ui.add_space(18.0);
+    ui.add_space(24.0);
     ui.label(
         RichText::new("Discussions IA")
             .size(14.0)
             .strong()
-            .color(mut_text()),
+            .color(theme::TEXT_FAINT),
     );
     discussion_button(ui, app, "Jarvis UI futuriste", "En cours", true);
     discussion_button(ui, app, "Recherche Google locale", "A brancher", false);
@@ -769,17 +820,17 @@ fn draw_logo_mark(ui: &mut egui::Ui, texture: &TextureHandle, size: f32, time: f
     painter.circle_filled(
         rect.center(),
         size * 0.56,
-        Color32::from_rgba_unmultiplied(8, 21, 32, 220),
+        Color32::from_rgba_unmultiplied(17, 20, 24, 235),
     );
     painter.circle_stroke(
         rect.center(),
         size * 0.55 + pulse * 2.0,
-        Stroke::new(1.5, Color32::from_rgba_unmultiplied(108, 236, 255, 150)),
+        Stroke::new(1.5, Color32::from_rgba_unmultiplied(210, 180, 111, 150)),
     );
     painter.circle_stroke(
         rect.center(),
         size * 0.42,
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 217, 142, 120)),
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(125, 138, 106, 130)),
     );
     painter.image(
         texture.id(),
@@ -791,7 +842,7 @@ fn draw_logo_mark(ui: &mut egui::Ui, texture: &TextureHandle, size: f32, time: f
         painter.circle_stroke(
             rect.center(),
             size * 0.62,
-            Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 226, 160, 180)),
+            Stroke::new(2.0, Color32::from_rgba_unmultiplied(210, 180, 111, 190)),
         );
     }
 }
@@ -800,13 +851,13 @@ fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
     draw_aurora_background(
         ui,
         app.app_started.elapsed().as_secs_f32() + 2.0,
-        Color32::from_rgb(11, 14, 21),
+        theme::PANEL,
     );
     ui.horizontal_centered(|ui| {
-        ui.add_space(16.0);
+        ui.add_space(20.0);
         ui.label(
             RichText::new(panel_title(app.active_panel))
-                .size(18.0)
+                .size(21.0)
                 .strong(),
         );
         ui.label(RichText::new("• interface locale native").color(mut_text()));
@@ -830,11 +881,7 @@ fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_workspace(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    draw_aurora_background(
-        ui,
-        app.app_started.elapsed().as_secs_f32(),
-        Color32::from_rgb(9, 11, 18),
-    );
+    draw_aurora_background(ui, app.app_started.elapsed().as_secs_f32(), theme::BG);
     match app.active_panel {
         Panel::Chat => draw_chat(ui, app),
         Panel::Search => draw_simple_panel(
@@ -868,17 +915,17 @@ fn draw_workspace(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_chat(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    ui.add_space(18.0);
+    ui.add_space(GLOBAL_PADDING);
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .stick_to_bottom(true)
         .show(ui, |ui| {
-            let max_width = ui.available_width().min(820.0);
+            let max_width = ui.available_width().min(CONTENT_MAX_WIDTH);
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                ui.set_max_width(max_width);
+                ui.set_width(max_width);
                 for message in &app.messages {
-                    draw_message(ui, message);
-                    ui.add_space(10.0);
+                    draw_message_aligned(ui, message);
+                    ui.add_space(12.0);
                 }
                 if app.loading {
                     draw_loading(ui, app.loading_started.elapsed().as_secs_f32());
@@ -887,6 +934,59 @@ fn draw_chat(ui: &mut egui::Ui, app: &mut JarvisUi) {
         });
 }
 
+fn draw_message_aligned(ui: &mut egui::Ui, message: &ChatMessage) {
+    let (label, accent, fill, width_ratio, align_right) = match message.role {
+        MessageRole::User => (
+            "Vous",
+            theme::GOLD_HOVER,
+            Color32::from_rgb(33, 34, 31),
+            0.68,
+            true,
+        ),
+        MessageRole::Jarvis => ("Jarvis", theme::GOLD, theme::PANEL, 0.72, false),
+        MessageRole::System => ("Systeme", theme::TEXT_MUTED, theme::SURFACE, 0.72, false),
+    };
+
+    let row_width = ui.available_width();
+    let bubble_width = (row_width * width_ratio).min(CONTENT_MAX_WIDTH * width_ratio);
+    let side_gap = (row_width - bubble_width - 24.0).max(0.0);
+
+    ui.horizontal(|ui| {
+        if align_right {
+            ui.add_space(side_gap);
+        }
+        ui.vertical(|ui| {
+            ui.set_max_width(bubble_width);
+            egui::Frame::none()
+                .fill(fill)
+                .stroke(Stroke::new(
+                    1.0,
+                    if align_right {
+                        theme::border_active()
+                    } else {
+                        theme::border()
+                    },
+                ))
+                .rounding(egui::Rounding::same(14.0))
+                .inner_margin(egui::Margin::symmetric(16.0, 14.0))
+                .show(ui, |ui| {
+                    ui.set_max_width(bubble_width);
+                    ui.label(RichText::new(label).size(13.0).strong().color(accent));
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(&message.content)
+                            .size(16.0)
+                            .color(theme::TEXT),
+                    );
+                });
+        });
+        if !align_right {
+            ui.add_space(side_gap);
+        }
+    });
+}
+
+#[allow(dead_code)]
 fn draw_message(ui: &mut egui::Ui, message: &ChatMessage) {
     let (label, accent, fill) = match message.role {
         MessageRole::User => (
@@ -919,10 +1019,10 @@ fn draw_message(ui: &mut egui::Ui, message: &ChatMessage) {
 }
 
 fn draw_files_panel(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    ui.set_max_width(ui.available_width().min(820.0));
-    ui.add_space(24.0);
+    ui.set_max_width(ui.available_width().min(CONTENT_MAX_WIDTH));
+    ui.add_space(GLOBAL_PADDING);
     ui.horizontal(|ui| {
-        ui.heading(RichText::new("📎 Fichiers joints").size(24.0));
+        ui.heading(RichText::new("📎 Fichiers joints").size(20.0));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui
                 .add_sized(
@@ -957,9 +1057,9 @@ fn draw_files_panel(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_settings_panel(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    ui.set_max_width(ui.available_width().min(820.0));
-    ui.add_space(24.0);
-    ui.heading(RichText::new("⚙ Parametres").size(24.0));
+    ui.set_max_width(ui.available_width().min(CONTENT_MAX_WIDTH));
+    ui.add_space(GLOBAL_PADDING);
+    ui.heading(RichText::new("⚙ Parametres").size(20.0));
     ui.add_space(14.0);
     setting_row(ui, "Modele actif", app.active_model.as_str());
     setting_row(ui, "Acces fichiers", app.access_level.as_str());
@@ -991,17 +1091,17 @@ fn draw_settings_panel(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_simple_panel(ui: &mut egui::Ui, title: &str, body: &str) {
-    ui.set_max_width(ui.available_width().min(820.0));
-    ui.add_space(26.0);
-    ui.heading(RichText::new(title).size(24.0));
+    ui.set_max_width(ui.available_width().min(CONTENT_MAX_WIDTH));
+    ui.add_space(GLOBAL_PADDING);
+    ui.heading(RichText::new(title).size(20.0));
     ui.add_space(12.0);
     ui.label(RichText::new(body).color(mut_text()));
 }
 
 fn draw_empty_state(ui: &mut egui::Ui, text: &str) {
     egui::Frame::none()
-        .fill(Color32::from_rgba_unmultiplied(25, 31, 42, 210))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(45, 58, 72)))
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::border()))
         .rounding(egui::Rounding::same(14.0))
         .inner_margin(egui::Margin::symmetric(18.0, 18.0))
         .show(ui, |ui| {
@@ -1009,6 +1109,91 @@ fn draw_empty_state(ui: &mut egui::Ui, text: &str) {
         });
 }
 
+fn draw_composer_spec(ui: &mut egui::Ui, app: &mut JarvisUi) {
+    draw_aurora_background(ui, app.app_started.elapsed().as_secs_f32() + 5.0, theme::BG);
+    let max_width = ui.available_width().min(CONTENT_MAX_WIDTH);
+    ui.add_space(if app.uploaded_files.is_empty() {
+        14.0
+    } else {
+        10.0
+    });
+    ui.with_layout(Layout::top_down(Align::Center), |ui| {
+        ui.set_width(max_width);
+        if !app.uploaded_files.is_empty() {
+            egui::ScrollArea::horizontal()
+                .max_height(44.0)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for file in &app.uploaded_files {
+                            file_chip(ui, file, false);
+                        }
+                    });
+                });
+            ui.add_space(8.0);
+        }
+
+        egui::Frame::none()
+            .fill(Color32::from_rgba_unmultiplied(22, 26, 31, 248))
+            .stroke(Stroke::new(1.0, theme::border()))
+            .rounding(egui::Rounding::same(16.0))
+            .inner_margin(egui::Margin::symmetric(16.0, 8.0))
+            .show(ui, |ui| {
+                ui.set_height(56.0);
+                ui.horizontal_centered(|ui| {
+                    if ui
+                        .add_sized(
+                            [40.0, 40.0],
+                            egui::Button::new(RichText::new("+").size(20.0).strong())
+                                .rounding(egui::Rounding::same(20.0)),
+                        )
+                        .on_hover_text("Uploader un fichier - Ctrl+O")
+                        .clicked()
+                    {
+                        app.open_upload_dialog();
+                    }
+
+                    let edit = egui::TextEdit::multiline(&mut app.input)
+                        .id(Id::new(INPUT_ID))
+                        .hint_text("Demande quelque chose a Jarvis...")
+                        .desired_rows(1)
+                        .desired_width((ui.available_width() - 108.0).max(240.0));
+                    ui.add(edit);
+
+                    let mic_label = if app.voice.is_recording() {
+                        "REC"
+                    } else {
+                        "MIC"
+                    };
+                    if ui
+                        .add_sized(
+                            [40.0, 40.0],
+                            egui::Button::new(RichText::new(mic_label).size(12.0).strong())
+                                .rounding(egui::Rounding::same(20.0)),
+                        )
+                        .on_hover_text("Enregistrer le micro - Ctrl+M")
+                        .clicked()
+                    {
+                        app.toggle_microphone();
+                    }
+                    if ui
+                        .add_sized(
+                            [40.0, 40.0],
+                            egui::Button::new(RichText::new("->").size(16.0).strong())
+                                .fill(theme::GOLD)
+                                .stroke(Stroke::new(1.0, theme::GOLD_HOVER))
+                                .rounding(egui::Rounding::same(20.0)),
+                        )
+                        .on_hover_text("Envoyer - Ctrl+Enter")
+                        .clicked()
+                    {
+                        app.send_current_message();
+                    }
+                });
+            });
+    });
+}
+
+#[allow(dead_code)]
 fn draw_composer(ui: &mut egui::Ui, app: &mut JarvisUi) {
     draw_aurora_background(
         ui,
@@ -1116,34 +1301,36 @@ fn sidebar_action(ui: &mut egui::Ui, label: &str, shortcut: &str, mut action: im
 
 fn nav_button(ui: &mut egui::Ui, selected: bool, label: &str, hover: &str) -> egui::Response {
     let fill = if selected {
-        Color32::from_rgba_unmultiplied(48, 61, 75, 230)
+        theme::ACTIVE
     } else {
-        Color32::from_rgba_unmultiplied(18, 22, 30, 180)
+        theme::SURFACE
     };
     let text = if selected {
-        RichText::new(label)
-            .strong()
-            .color(Color32::from_rgb(241, 248, 252))
+        RichText::new(label).size(16.0).strong().color(theme::TEXT)
     } else {
-        RichText::new(label).color(Color32::from_rgb(205, 214, 222))
+        RichText::new(label).size(16.0).color(theme::TEXT_MUTED)
     };
     let response = ui
         .add_sized(
-            [ui.available_width().min(214.0), 38.0],
+            [ui.available_width(), 52.0],
             egui::Button::new(text)
                 .fill(fill)
                 .stroke(Stroke::new(
                     1.0,
-                    Color32::from_rgba_unmultiplied(78, 150, 182, if selected { 120 } else { 30 }),
+                    if selected {
+                        theme::border_active()
+                    } else {
+                        theme::border()
+                    },
                 ))
-                .rounding(egui::Rounding::same(12.0)),
+                .rounding(egui::Rounding::same(16.0)),
         )
         .on_hover_text(if hover.is_empty() { label } else { hover });
     if response.hovered() {
         ui.painter().rect_stroke(
             response.rect.expand(1.0),
-            egui::Rounding::same(12.0),
-            Stroke::new(1.0, Color32::from_rgb(93, 217, 245)),
+            egui::Rounding::same(16.0),
+            Stroke::new(1.0, theme::GOLD_HOVER),
         );
     }
     response
@@ -1186,20 +1373,20 @@ fn draw_access_dropdown(ui: &mut egui::Ui, app: &mut JarvisUi) {
 
 fn draw_network_badge(ui: &mut egui::Ui, status: &NetworkStatus) {
     let (text, color) = match status {
-        NetworkStatus::Checking => ("NET ...".to_string(), Color32::from_rgb(168, 178, 188)),
+        NetworkStatus::Checking => ("NET ...".to_string(), theme::TEXT_MUTED),
         NetworkStatus::Online { mbps, latency_ms } => (
             format!("NET {:.1} Mbps / {} ms", mbps, latency_ms),
-            Color32::from_rgb(81, 230, 164),
+            theme::ONLINE,
         ),
-        NetworkStatus::Offline => ("NET OFF".to_string(), Color32::from_rgb(255, 96, 104)),
+        NetworkStatus::Offline => ("NET OFF".to_string(), theme::OFFLINE),
     };
-    ui.label(RichText::new(text).strong().color(color));
+    ui.label(RichText::new(text).size(13.0).strong().color(color));
 }
 
 fn setting_row(ui: &mut egui::Ui, name: &str, value: &str) {
     egui::Frame::none()
-        .fill(Color32::from_rgba_unmultiplied(26, 32, 42, 220))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(50, 64, 78)))
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::border()))
         .rounding(egui::Rounding::same(12.0))
         .inner_margin(egui::Margin::symmetric(14.0, 10.0))
         .show(ui, |ui| {
@@ -1220,14 +1407,14 @@ fn file_chip(ui: &mut egui::Ui, file: &UploadedFile, full: bool) {
         .and_then(|name| name.to_str())
         .unwrap_or("fichier");
     let (status, color) = match &file.status {
-        FileStatus::Ready => ("pret", Color32::from_rgb(84, 222, 164)),
-        FileStatus::Rejected(reason) => (reason.as_str(), Color32::from_rgb(255, 112, 112)),
+        FileStatus::Ready => ("pret", theme::ONLINE),
+        FileStatus::Rejected(reason) => (reason.as_str(), theme::OFFLINE),
     };
     egui::Frame::none()
-        .fill(Color32::from_rgba_unmultiplied(26, 34, 46, 225))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(58, 78, 96)))
-        .rounding(egui::Rounding::same(14.0))
-        .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::border()))
+        .rounding(egui::Rounding::same(12.0))
+        .inner_margin(egui::Margin::symmetric(14.0, 8.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("📄").size(18.0));
@@ -1254,14 +1441,15 @@ fn draw_aurora_background(ui: &mut egui::Ui, time: f32, base: Color32) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, base);
     draw_dark_aurora(&painter, rect, time);
+    draw_geometric_field(&painter, rect, time);
 }
 
 fn draw_dark_aurora(painter: &egui::Painter, rect: Rect, time: f32) {
     let colors = [
-        Color32::from_rgba_unmultiplied(70, 245, 208, 54),
-        Color32::from_rgba_unmultiplied(52, 178, 236, 45),
-        Color32::from_rgba_unmultiplied(145, 105, 238, 34),
-        Color32::from_rgba_unmultiplied(255, 182, 112, 22),
+        theme::KHAKI_LIGHT.gamma_multiply(0.35),
+        Color32::from_rgba_unmultiplied(184, 154, 90, 34),
+        theme::KHAKI_DARK.gamma_multiply(0.34),
+        Color32::from_rgba_unmultiplied(210, 180, 111, 20),
     ];
     for (band, color) in colors.iter().enumerate() {
         for layer in 0..3 {
@@ -1292,12 +1480,60 @@ fn draw_dark_aurora(painter: &egui::Painter, rect: Rect, time: f32) {
             [Pos2::new(x, top), Pos2::new(x + drift * 18.0, bottom)],
             Stroke::new(
                 1.2 + drift.abs() * 1.8,
-                Color32::from_rgba_unmultiplied(110, 238, 226, alpha),
+                Color32::from_rgba_unmultiplied(210, 180, 111, alpha),
             ),
         );
     }
 }
 
+fn draw_geometric_field(painter: &egui::Painter, rect: Rect, time: f32) {
+    let cols = 8;
+    let rows = 5;
+    for row in 0..rows {
+        for col in 0..cols {
+            let t = time * 0.06 + row as f32 * 0.37 + col as f32 * 0.19;
+            let x = rect.left() + rect.width() * ((col as f32 + 0.5) / cols as f32);
+            let y = rect.top() + rect.height() * ((row as f32 + 0.5) / rows as f32);
+            let drift = Vec2::new(t.sin() * 10.0, t.cos() * 6.0);
+            let center = Pos2::new(x, y) + drift;
+            let radius = 18.0 + ((row + col) % 3) as f32 * 7.0;
+            let alpha = 18 + (((t.sin() + 1.0) * 12.0) as u8);
+            draw_hexagon(
+                painter,
+                center,
+                radius,
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(210, 180, 111, alpha)),
+            );
+        }
+    }
+
+    for index in 0..12 {
+        let t = index as f32 / 11.0;
+        let y = rect.top() + rect.height() * (0.18 + t * 0.64);
+        let x_offset = (time * 0.08 + t * 8.0).sin() * 36.0;
+        painter.line_segment(
+            [
+                Pos2::new(rect.left() + rect.width() * 0.12 + x_offset, y),
+                Pos2::new(
+                    rect.right() - rect.width() * 0.14 + x_offset * 0.4,
+                    y + 22.0,
+                ),
+            ],
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(125, 138, 106, 22)),
+        );
+    }
+}
+
+fn draw_hexagon(painter: &egui::Painter, center: Pos2, radius: f32, stroke: Stroke) {
+    let mut points = Vec::with_capacity(7);
+    for index in 0..=6 {
+        let angle = std::f32::consts::TAU * index as f32 / 6.0;
+        points.push(center + Vec2::new(angle.cos() * radius, angle.sin() * radius));
+    }
+    painter.add(egui::Shape::line(points, stroke));
+}
+
+#[allow(dead_code)]
 fn draw_light_aurora(painter: &egui::Painter, rect: Rect, time: f32) {
     let colors = [
         Color32::from_rgba_unmultiplied(70, 168, 220, 42),
@@ -1338,23 +1574,23 @@ fn draw_infinity_ribbon(painter: &egui::Painter, center: Pos2, progress: f32, ro
     }
     painter.add(egui::Shape::line(
         offset_points(&points, Vec2::new(0.0, 8.0)),
-        Stroke::new(56.0, Color32::from_rgba_unmultiplied(7, 23, 42, 46)),
+        Stroke::new(56.0, Color32::from_rgba_unmultiplied(0, 0, 0, 54)),
     ));
     painter.add(egui::Shape::line(
         points.clone(),
-        Stroke::new(48.0, Color32::from_rgba_unmultiplied(32, 88, 150, 86)),
+        Stroke::new(48.0, Color32::from_rgba_unmultiplied(94, 102, 82, 90)),
     ));
     painter.add(egui::Shape::line(
         points.clone(),
-        Stroke::new(32.0, Color32::from_rgba_unmultiplied(126, 229, 244, 172)),
+        Stroke::new(32.0, Color32::from_rgba_unmultiplied(184, 154, 90, 162)),
     ));
     painter.add(egui::Shape::line(
         offset_points(&points, Vec2::new(-3.0, -4.0)),
-        Stroke::new(9.0, Color32::from_rgba_unmultiplied(237, 253, 255, 214)),
+        Stroke::new(9.0, Color32::from_rgba_unmultiplied(234, 229, 216, 214)),
     ));
     painter.add(egui::Shape::line(
         offset_points(&points, Vec2::new(4.0, 4.0)),
-        Stroke::new(7.0, Color32::from_rgba_unmultiplied(22, 89, 155, 142)),
+        Stroke::new(7.0, Color32::from_rgba_unmultiplied(94, 102, 82, 150)),
     ));
 }
 
@@ -1402,7 +1638,7 @@ fn format_size(bytes: u64) -> String {
 }
 
 fn mut_text() -> Color32 {
-    Color32::from_rgb(154, 169, 182)
+    theme::TEXT_MUTED
 }
 
 fn chrono_like_timestamp() -> String {

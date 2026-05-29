@@ -2,6 +2,7 @@
 name = "Jarvis"
 environment = "development"
 audit_log_path = "logs/audit.jsonl"
+design_tokens_path = "config/design-tokens.toml"
 
 [network]
 internet_required_for_ai = true

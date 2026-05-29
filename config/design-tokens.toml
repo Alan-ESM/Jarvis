@@ -1,0 +1,98 @@
+[window]
+base_width = 1440
+base_height = 900
+min_width = 1280
+min_height = 800
+debug_width = 1600
+debug_height = 1000
+global_margin = 24
+block_gap = 16
+major_gap_min = 24
+major_gap_max = 32
+
+[layout]
+sidebar_width = 320
+central_max_width = 1120
+topbar_height = 64
+composer_height = 92
+composer_max_height = 140
+sidebar_padding = 20
+card_padding_min = 18
+card_padding_max = 20
+chat_padding = 16
+input_padding = 16
+header_padding = 20
+
+[palette]
+background = "#0A0B0D"
+panel_deep = "#111418"
+surface_secondary = "#161A1F"
+surface_active = "#1C2128"
+khaki_dark = "#5E6652"
+khaki_light = "#7D8A6A"
+gold_matte = "#B89A5A"
+gold_hover = "#D2B46F"
+off_white = "#EAE5D8"
+warm_gray = "#A8A39A"
+weak_gray = "#6F746D"
+subtle_border = "rgba(255,255,255,0.08)"
+
+[typography]
+primary = "Inter"
+windows_fallback = "Segoe UI Variable"
+premium_fallback = "Manrope"
+title_size = 28
+section_title_size = 20
+sidebar_button_size = 16
+chat_text_size = 16
+secondary_size = 13
+badge_size = 12
+placeholder_size = 15
+chat_line_height = 1.5
+title_line_height = 1.15
+button_line_height = 1.2
+
+[components.sidebar]
+height_logo_zone = 72
+logo_min = 56
+logo_max = 64
+button_height = 52
+button_radius = 16
+button_padding_x = 16
+button_gap = 10
+group_gap_min = 18
+group_gap_max = 24
+
+[components.chat]
+assistant_max_width_ratio = 0.72
+user_max_width_ratio = 0.68
+message_padding_x = 16
+message_padding_y = 14
+message_radius = 14
+message_gap = 12
+author_gap = 6
+
+[components.attachments]
+height = 44
+padding_x = 14
+padding_y = 12
+radius = 12
+icon_size = 18
+name_size = 14
+status_size = 12
+
+[components.input]
+height = 56
+max_height = 140
+radius = 16
+button_diameter = 40
+
+[motion]
+hover_ms_min = 150
+hover_ms_max = 180
+panel_ms_min = 200
+panel_ms_max = 240
+view_ms_min = 220
+view_ms_max = 280
+background_opacity_min = 0.06
+background_opacity_max = 0.20

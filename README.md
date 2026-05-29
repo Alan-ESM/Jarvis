@@ -17,6 +17,7 @@ Voir:
 - `docs/ARCHITECTURE.md`
 - `docs/SECURITY_MODEL.md`
 - `docs/PACKAGING_WINDOWS.md`
+- `config/design-tokens.toml`
 
 ## Demarrage developpement
 
@@ -33,6 +34,11 @@ Le script `scripts/cargo-dev.ps1` detecte MSVC et le Windows SDK, puis place le 
 La configuration se fait via `JARVIS_CONFIG` ou `config/jarvis.example.toml`. Les cles API doivent rester dans les variables d'environnement, jamais dans le code.
 
 Important: si une cle API a ete collee dans un chat, considere-la comme compromise et regenere-la cote fournisseur avant de l'utiliser dans Jarvis.
+
+## Design system
+
+Les dimensions, couleurs, espacements et ratios UI de reference sont documentes dans `config/design-tokens.toml`.
+L'interface courante applique ce socle: fenetre 1440 x 900, minimum 1280 x 800, sidebar 320 px, topbar 64 px, contenu central max 1120 px, palette sombre kaki/or et chat separe gauche/droite.
 
 ## Raccourcis
 
