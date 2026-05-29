@@ -1,0 +1,14 @@
+[package]
+name = "jarvis-tools"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+jarvis-audit = { path = "../jarvis-audit" }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true

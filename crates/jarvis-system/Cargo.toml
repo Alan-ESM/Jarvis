@@ -1,0 +1,14 @@
+[package]
+name = "jarvis-system"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+jarvis-config = { path = "../jarvis-config" }
+reqwest.workspace = true
+serde.workspace = true
+tokio.workspace = true

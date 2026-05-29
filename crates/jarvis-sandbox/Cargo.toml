@@ -1,0 +1,14 @@
+[package]
+name = "jarvis-sandbox"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+jarvis-audit = { path = "../jarvis-audit" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true

@@ -1,0 +1,47 @@
+[app]
+name = "Jarvis"
+environment = "development"
+audit_log_path = "logs/audit.jsonl"
+
+[network]
+internet_required_for_ai = true
+probe_url = "https://www.google.com/generate_204"
+timeout_ms = 2500
+
+[ai]
+provider = "openai-compatible"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+flash_model = "gpt-5-mini"
+x_model = "gpt-5"
+ultra_model = "gpt-5"
+quality_threshold = 0.74
+
+[google]
+enabled = true
+api_key_env = "GOOGLE_SEARCH_API_KEY"
+engine_id_env = "GOOGLE_SEARCH_ENGINE_ID"
+
+[voice]
+enabled = true
+provider = "huggingface"
+api_key_env = "HUGGINGFACE_API_TOKEN"
+transcribe_model_env = "HUGGINGFACE_TRANSCRIBE_MODEL"
+default_transcribe_model = "openai/whisper-large-v3-turbo"
+
+[security]
+file_access_level = "intermediate"
+require_audit_log = true
+allow_unlimited_pc_inspection = false
+
+[sandbox]
+enabled = true
+base_dir = ".sandbox"
+timeout_secs = 120
+cleanup_after_run = true
+max_output_bytes = 200000
+
+[paths]
+authorized_roots = [
+    ".",
+]

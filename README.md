@@ -1,5 +1,86 @@
-Jarvis est une application desktop native conçue pour Windows, pensée comme un assistant IA local, puissant et modulaire. Le projet vise à offrir une expérience moderne et fluide, avec une interface futuriste, un système vocal, une recherche web intégrée, et un superviseur multi-modèles capable de router intelligemment les tâches entre plusieurs moteurs d’IA selon leur complexité. Jarvis n’est pas une simple application de chat : c’est un véritable environnement de travail assisté, capable d’aider à la recherche, à la rédaction, à l’organisation, à l’automatisation et à la gestion de tâches locales sur le PC.
+# Jarvis
 
-L’architecture de Jarvis repose sur une séparation claire entre l’interface, l’orchestration IA, les outils système et la configuration. Le superviseur coordonne plusieurs niveaux de modèles : un mode rapide pour les réponses immédiates, un mode intermédiaire pour le raisonnement et la planification, et un mode avancé pour la génération finale et les tâches exigeantes. L’application peut aussi intégrer des fonctions de recherche Google, de transcription vocale, de gestion de dossiers autorisés et d’automatisation locale, tout en restant structurée pour préserver la sécurité et le contrôle utilisateur.
+Jarvis est une application desktop native Windows, installee en `.exe`, concue comme un assistant IA local, modulaire et extensible.
 
-Le projet est pensé pour évoluer progressivement vers une solution plus complète et plus ambitieuse. Il doit rester extensible, lisible et maintenable, afin de permettre l’ajout de nouveaux outils, de nouveaux modèles IA, de plugins, d’une mémoire persistante et de futures versions multiplateformes. L’objectif est de construire une base sérieuse, moderne et professionnelle pour un assistant personnel de nouvelle génération, capable de fonctionner localement sur Windows avec une expérience utilisateur premium et un potentiel d’évolution élevé.
+Ce depot contient le socle initial du produit:
+
+- UI desktop native Rust, sans Electron et sans application web.
+- Superviseur multi-modeles: Flash, X et Ultra.
+- Garde Internet: les reponses IA exigent une connexion active.
+- Systeme de permissions fichiers: intermediaire, illimite et desactive.
+- Journalisation d'audit en JSONL.
+- Modules pour recherche Google, micro, logs Windows, inspection PC, Git et sandbox.
+- Plan de packaging Windows `.exe` et futur installateur.
+
+Voir:
+
+- `docs/ARCHITECTURE.md`
+- `docs/SECURITY_MODEL.md`
+- `docs/PACKAGING_WINDOWS.md`
+
+## Demarrage developpement
+
+Installer Rust et les Build Tools Visual Studio C++ puis lancer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\cargo-dev.ps1 check
+powershell -ExecutionPolicy Bypass -File .\scripts\cargo-dev.ps1 build -p jarvis-app
+powershell -ExecutionPolicy Bypass -File .\scripts\cargo-dev.ps1 run -p jarvis-app
+```
+
+Le script `scripts/cargo-dev.ps1` detecte MSVC et le Windows SDK, puis place le dossier de build dans `%LOCALAPPDATA%\Jarvis\target` pour eviter les problemes de compilation dans OneDrive.
+
+La configuration se fait via `JARVIS_CONFIG` ou `config/jarvis.example.toml`. Les cles API doivent rester dans les variables d'environnement, jamais dans le code.
+
+Important: si une cle API a ete collee dans un chat, considere-la comme compromise et regenere-la cote fournisseur avant de l'utiliser dans Jarvis.
+
+## Raccourcis
+
+- `Ctrl+Enter`: envoyer le message.
+- `Ctrl+O`: uploader des fichiers.
+- `Ctrl+N`: nouveau clavardage.
+- `Ctrl+K`: ouvrir Recherche.
+- `Ctrl+L`: revenir au champ de saisie.
+- `Ctrl+T`: ouvrir un terminal dans le dossier du projet.
+- `Ctrl+M`: demarrer/arreter l'enregistrement micro.
+- `Enter` ou `Escape`: passer le portail de demarrage.
+
+## Recherche Google
+
+La recherche utilise Google Custom Search quand ces variables existent:
+
+```powershell
+$env:GOOGLE_SEARCH_API_KEY="..."
+$env:GOOGLE_SEARCH_ENGINE_ID="..."
+```
+
+Sans ces variables, Jarvis affiche un message de configuration au lieu de faire semblant d'avoir cherche.
+
+## Transcription vocale
+
+Le bouton micro sauvegarde un WAV local, puis tente une transcription Hugging Face si ces variables existent:
+
+```powershell
+$env:HUGGINGFACE_API_TOKEN="..."
+$env:HUGGINGFACE_TRANSCRIBE_MODEL="openai/whisper-large-v3-turbo"
+```
+
+Sans token, Jarvis garde l'audio localement et affiche clairement que la transcription est desactivee.
+
+## Inspiration visuelle Canva
+
+Canva a ete utilise pour generer des pistes d'aurores boreales realistes pour le portail et les fonds:
+
+- https://www.canva.com/d/Y8YZtA-yL2zcMDe
+- https://www.canva.com/d/ngm7tcN2KAF2VPc
+- https://www.canva.com/d/IW0fz-Q7-8YyuPz
+- https://www.canva.com/d/Ol3K7ihKPnLRee1
+
+## Langages utilises
+
+- Rust: application desktop native, UI, orchestration locale, securite, micro, recherche, sandbox.
+- TOML: configuration.
+- PowerShell: script de build Windows.
+- Markdown: documentation.
+
+MSVC et Windows SDK servent uniquement a compiler l'executable Windows.

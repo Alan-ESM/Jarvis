@@ -1,0 +1,17 @@
+[package]
+name = "jarvis-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+jarvis-audit = { path = "../jarvis-audit" }
+jarvis-config = { path = "../jarvis-config" }
+jarvis-providers = { path = "../jarvis-providers" }
+jarvis-system = { path = "../jarvis-system" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

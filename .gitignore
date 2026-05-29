@@ -1,0 +1,11 @@
+/target/
+/.sandbox/
+/dist/
+/installer/
+/.env
+*.log
+*.pdb
+*.ilk
+*.exe
+*.msi
+*.zip
