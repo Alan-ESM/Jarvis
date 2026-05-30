@@ -108,6 +108,7 @@ enum Panel {
 #[derive(Debug, Clone, Copy)]
 enum IconKind {
     Edit,
+    Terminal,
     Upload,
     Mic,
     Send,
@@ -312,6 +313,7 @@ impl JarvisUi {
         let mut send = false;
         let mut upload = false;
         let mut focus_input = false;
+        let mut terminal = false;
         let mut mic = false;
         ctx.input(|input| {
             if input.key_pressed(egui::Key::Enter) && self.show_portal {
@@ -335,6 +337,9 @@ impl JarvisUi {
             if input.modifiers.ctrl && input.key_pressed(egui::Key::L) {
                 focus_input = true;
             }
+            if input.modifiers.ctrl && input.key_pressed(egui::Key::T) {
+                terminal = true;
+            }
             if input.modifiers.ctrl && input.key_pressed(egui::Key::M) {
                 mic = true;
             }
@@ -348,6 +353,9 @@ impl JarvisUi {
         }
         if focus_input {
             ctx.memory_mut(|memory| memory.request_focus(Id::new(INPUT_ID)));
+        }
+        if terminal {
+            self.open_terminal();
         }
         if mic {
             self.toggle_microphone();
@@ -846,6 +854,24 @@ fn draw_icon(painter: &egui::Painter, center: Pos2, icon: IconKind, color: Color
                 stroke,
             );
         }
+        IconKind::Terminal => {
+            let rect = Rect::from_center_size(center, Vec2::new(20.0, 15.0) * scale);
+            painter.rect_stroke(rect, egui::Rounding::same(3.0), stroke);
+            painter.line_segment(
+                [
+                    center + Vec2::new(-7.0, -2.0) * scale,
+                    center + Vec2::new(-3.0, 2.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(-7.0, 6.0) * scale,
+                    center + Vec2::new(3.0, 6.0) * scale,
+                ],
+                stroke,
+            );
+        }
         IconKind::Upload => {
             painter.line_segment(
                 [
@@ -1024,7 +1050,19 @@ fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
         ui.label(RichText::new("• interface locale native").color(mut_text()));
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if icon_circle_button(
+                ui,
+                IconKind::Terminal,
+                Color32::from_rgb(42, 44, 42),
+                theme::TEXT,
+                "Ouvrir le terminal - Ctrl+T",
+            )
+            .clicked()
+            {
+                app.open_terminal();
+            }
             draw_model_dropdown(ui, app);
+            draw_access_dropdown(ui, app);
             draw_network_badge(ui, &app.network);
         });
     });
@@ -1836,12 +1874,17 @@ fn measure_network() -> NetworkStatus {
 
 fn jarvis_ai_summary(prompt: &str, tier: &str) -> String {
     let config = ai_model_config(tier);
+    let google = google_search_summary(prompt);
+    let enriched_prompt = format!(
+        "Question utilisateur:\n{}\n\nResultats Google disponibles:\n{}\n\nReponds avec un texte clair et utile. Si la recherche Google n'est pas configuree, indique-le brievement puis reponds avec tes connaissances generales.",
+        prompt, google
+    );
     let key = match env::var(config.key_env) {
         Ok(value) if !value.trim().is_empty() => value,
         _ => {
             return format!(
-                "{} est configure sur {}, mais {} est absent. Ajoute une cle regeneree dans l'environnement, jamais dans le code.",
-                config.tier, config.provider_label, config.key_env
+                "Recherche Google\n{}\n\n{} est configure sur {}, mais {} est absent. Ajoute une cle regeneree dans l'environnement, jamais dans le code.",
+                google, config.tier, config.provider_label, config.key_env
             );
         }
     };
@@ -1853,10 +1896,12 @@ fn jarvis_ai_summary(prompt: &str, tier: &str) -> String {
 
     match config.provider_kind {
         AiProviderKind::OpenAiCompatible => {
-            call_openai_compatible(&config, &key, &model, &system, prompt)
+            call_openai_compatible(&config, &key, &model, &system, &enriched_prompt)
         }
-        AiProviderKind::Gemini => call_gemini(&config, &key, &model, &system, prompt),
-        AiProviderKind::Anthropic => call_anthropic(&config, &key, &model, &system, prompt),
+        AiProviderKind::Gemini => call_gemini(&config, &key, &model, &system, &enriched_prompt),
+        AiProviderKind::Anthropic => {
+            call_anthropic(&config, &key, &model, &system, &enriched_prompt)
+        }
     }
 }
 

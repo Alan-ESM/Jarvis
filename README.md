@@ -47,6 +47,7 @@ L'interface courante applique ce socle: fenetre 1440 x 900, minimum 1280 x 800, 
 - `Ctrl+N`: nouveau clavardage.
 - `Ctrl+K`: revenir au champ de saisie.
 - `Ctrl+L`: revenir au champ de saisie.
+- `Ctrl+T`: ouvrir un terminal dans le dossier du projet.
 - `Ctrl+M`: demarrer/arreter l'enregistrement micro.
 - `Enter` ou `Escape`: passer le portail de demarrage.
 
@@ -59,6 +60,7 @@ $env:GOOGLE_SEARCH_API_KEY="..."
 $env:GOOGLE_SEARCH_ENGINE_ID="..."
 ```
 
+Quand ces variables existent, chaque prompt lance une recherche et injecte les resultats dans la reponse texte de Jarvis.
 Sans ces variables, Jarvis affiche un message de configuration au lieu de faire semblant d'avoir cherche.
 
 ## Transcription vocale
