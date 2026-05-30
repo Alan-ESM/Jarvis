@@ -10,12 +10,26 @@ probe_url = "https://www.google.com/generate_204"
 timeout_ms = 2500
 
 [ai]
-provider = "openai-compatible"
-base_url = "https://api.openai.com/v1"
-api_key_env = "OPENAI_API_KEY"
-flash_model = "gpt-5-mini"
-x_model = "gpt-5"
-ultra_model = "gpt-5"
+provider = "tiered"
+base_url = ""
+api_key_env = ""
+flash_provider_env = "JARVIS_FLASH_PROVIDER"
+flash_provider_default = "gemini"
+flash_key_env = "GEMINI_API_KEY"
+flash_model_env = "JARVIS_FLASH_MODEL"
+flash_model = "gemini-flash-latest"
+x_provider_env = "JARVIS_X_PROVIDER"
+x_provider_default = "deepseek"
+x_key_env = "DEEPSEEK_API_KEY"
+x_model_env = "JARVIS_X_MODEL"
+x_model = "deepseek-reasoner"
+ultra_provider_env = "JARVIS_ULTRA_PROVIDER"
+ultra_provider_default = "openrouter"
+ultra_key_env = "OPENROUTER_API_KEY"
+ultra_model_env = "JARVIS_ULTRA_MODEL"
+ultra_model = "deepseek-v4-pro[1m]"
+groq_key_env = "GROQ_API_KEY"
+claude_key_env = "ANTHROPIC_API_KEY"
 quality_threshold = 0.74
 
 [google]

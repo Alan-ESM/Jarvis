@@ -45,9 +45,8 @@ L'interface courante applique ce socle: fenetre 1440 x 900, minimum 1280 x 800, 
 - `Ctrl+Enter`: envoyer le message.
 - `Ctrl+O`: uploader des fichiers.
 - `Ctrl+N`: nouveau clavardage.
-- `Ctrl+K`: ouvrir Recherche.
+- `Ctrl+K`: revenir au champ de saisie.
 - `Ctrl+L`: revenir au champ de saisie.
-- `Ctrl+T`: ouvrir un terminal dans le dossier du projet.
 - `Ctrl+M`: demarrer/arreter l'enregistrement micro.
 - `Enter` ou `Escape`: passer le portail de demarrage.
 
@@ -72,6 +71,18 @@ $env:HUGGINGFACE_TRANSCRIBE_MODEL="openai/whisper-large-v3-turbo"
 ```
 
 Sans token, Jarvis garde l'audio localement et affiche clairement que la transcription est desactivee.
+
+## Routage IA
+
+L'interface expose seulement les 3 niveaux prevus: `Flash`, `X`, `Ultra`.
+Les cles restent dans l'environnement local, jamais dans Git:
+
+- `Flash`: provider par defaut `gemini`, variables `GEMINI_API_KEY`, `JARVIS_FLASH_MODEL`.
+- `X`: provider par defaut `deepseek`, variables `DEEPSEEK_API_KEY`, `JARVIS_X_MODEL`.
+- `Ultra`: provider par defaut `openrouter`, variables `OPENROUTER_API_KEY`, `JARVIS_ULTRA_MODEL`.
+- Providers disponibles par configuration: `gemini`, `groq`, `deepseek`, `claude`, `openrouter`.
+
+Si une cle a ete collee dans un chat, regenere-la avant de la mettre dans ton environnement.
 
 ## Inspiration visuelle Canva
 

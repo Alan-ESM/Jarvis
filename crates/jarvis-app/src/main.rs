@@ -20,7 +20,7 @@ use std::{
 
 const LOGO_BYTES: &[u8] = include_bytes!("../../../assets/Jarvis.png");
 const INPUT_ID: &str = "jarvis-composer-input";
-const MODELS: [&str; 5] = ["Flash", "X", "Ultra", "GPT-5", "OpenAI compatible"];
+const MODELS: [&str; 3] = ["Flash", "X", "Ultra"];
 const ACCESS_LEVELS: [&str; 3] = ["Intermediaire", "Illimite", "Desactive"];
 const MAX_UPLOAD_BYTES: u64 = 100 * 1024 * 1024;
 const WINDOW_SIZE: [f32; 2] = [1440.0, 900.0];
@@ -93,6 +93,7 @@ enum MessageRole {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 enum Panel {
     Chat,
     Search,
@@ -102,6 +103,14 @@ enum Panel {
     Files,
     Logs,
     Settings,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IconKind {
+    Edit,
+    Upload,
+    Mic,
+    Send,
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +136,7 @@ enum NetworkStatus {
 #[derive(Debug, Clone)]
 struct SearchReply {
     query: String,
+    tier: String,
     summary: String,
 }
 
@@ -148,6 +158,25 @@ struct RecordingHandle {
     samples: Arc<Mutex<Vec<i16>>>,
     sample_rate: u32,
     channels: u16,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AiProviderKind {
+    OpenAiCompatible,
+    Gemini,
+    Anthropic,
+}
+
+#[derive(Debug, Clone)]
+struct AiModelConfig {
+    tier: String,
+    provider_label: &'static str,
+    provider_kind: AiProviderKind,
+    key_env: &'static str,
+    model_env: &'static str,
+    default_model: &'static str,
+    base_url: &'static str,
+    max_output_tokens: u32,
 }
 
 struct JarvisUi {
@@ -230,7 +259,7 @@ impl JarvisUi {
         self.input.clear();
         self.loading = true;
         self.loading_started = Instant::now();
-        self.spawn_google_search(content);
+        self.spawn_ai_reply(content, self.active_model.clone());
     }
 
     fn new_chat(&mut self) {
@@ -283,7 +312,6 @@ impl JarvisUi {
         let mut send = false;
         let mut upload = false;
         let mut focus_input = false;
-        let mut terminal = false;
         let mut mic = false;
         ctx.input(|input| {
             if input.key_pressed(egui::Key::Enter) && self.show_portal {
@@ -302,13 +330,10 @@ impl JarvisUi {
                 self.new_chat();
             }
             if input.modifiers.ctrl && input.key_pressed(egui::Key::K) {
-                self.active_panel = Panel::Search;
+                focus_input = true;
             }
             if input.modifiers.ctrl && input.key_pressed(egui::Key::L) {
                 focus_input = true;
-            }
-            if input.modifiers.ctrl && input.key_pressed(egui::Key::T) {
-                terminal = true;
             }
             if input.modifiers.ctrl && input.key_pressed(egui::Key::M) {
                 mic = true;
@@ -323,9 +348,6 @@ impl JarvisUi {
         }
         if focus_input {
             ctx.memory_mut(|memory| memory.request_focus(Id::new(INPUT_ID)));
-        }
-        if terminal {
-            self.open_terminal();
         }
         if mic {
             self.toggle_microphone();
@@ -344,10 +366,7 @@ impl JarvisUi {
             self.active_panel = Panel::Chat;
             self.messages.push(ChatMessage {
                 role: MessageRole::Jarvis,
-                content: format!(
-                    "🔎 Recherche Google pour: {}\n\n{}",
-                    reply.query, reply.summary
-                ),
+                content: format!("{} - {}\n\n{}", reply.tier, reply.query, reply.summary),
             });
         }
         while let Ok(reply) = self.voice_rx.try_recv() {
@@ -376,15 +395,19 @@ impl JarvisUi {
         });
     }
 
-    fn spawn_google_search(&mut self, query: String) {
+    fn spawn_ai_reply(&mut self, query: String, tier: String) {
         if self.search_running {
             return;
         }
         self.search_running = true;
         let tx = self.search_tx.clone();
         thread::spawn(move || {
-            let summary = google_search_summary(&query);
-            let _ = tx.send(SearchReply { query, summary });
+            let summary = jarvis_ai_summary(&query, &tier);
+            let _ = tx.send(SearchReply {
+                query,
+                tier,
+                summary,
+            });
         });
     }
 
@@ -738,7 +761,7 @@ fn draw_portal(ui: &mut egui::Ui, app: &mut JarvisUi) {
 }
 
 fn draw_sidebar(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    draw_aurora_background(ui, app.app_started.elapsed().as_secs_f32(), theme::PANEL);
+    ui.painter().rect_filled(ui.max_rect(), 0.0, theme::PANEL);
     ui.add_space(20.0);
     ui.horizontal(|ui| {
         draw_logo_mark(ui, &app.logo, 62.0, app.app_started.elapsed().as_secs_f32());
@@ -753,63 +776,19 @@ fn draw_sidebar(ui: &mut egui::Ui, app: &mut JarvisUi) {
     });
     ui.add_space(24.0);
 
-    sidebar_action(ui, "📝 Nouveau clavardage", "Ctrl+N", || app.new_chat());
-    if nav_button(
-        ui,
-        app.active_panel == Panel::Search,
-        "🔎 Recherche",
-        "Ctrl+K",
-    )
-    .clicked()
-    {
-        app.active_panel = Panel::Search;
+    if nav_button_icon(ui, false, IconKind::Edit, "Nouveau clavardage", "Ctrl+N").clicked() {
+        app.new_chat();
     }
-    if nav_button(ui, app.active_panel == Panel::Extensions, "🧩 Modules", "").clicked() {
-        app.active_panel = Panel::Extensions;
-    }
-    if nav_button(
-        ui,
-        app.active_panel == Panel::Automations,
-        "⏱ Automatisations",
-        "",
-    )
-    .clicked()
-    {
-        app.active_panel = Panel::Automations;
-    }
-    if nav_button(
-        ui,
-        app.active_panel == Panel::Files,
-        "📎 Fichiers joints",
-        "Ctrl+O",
-    )
-    .clicked()
-    {
-        app.active_panel = Panel::Files;
-    }
-    if nav_button(ui, app.active_panel == Panel::Logs, "📜 Logs", "").clicked() {
-        app.active_panel = Panel::Logs;
-    }
-
-    ui.add_space(24.0);
-    ui.label(
-        RichText::new("Discussions IA")
-            .size(14.0)
-            .strong()
-            .color(theme::TEXT_FAINT),
-    );
-    discussion_button(ui, app, "Jarvis UI futuriste", "En cours", true);
-    discussion_button(ui, app, "Recherche Google locale", "A brancher", false);
-    discussion_button(ui, app, "Micro et fichiers", "Prototype", false);
-    discussion_button(ui, app, "Securite sandbox", "Masque UI", false);
 
     ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-        ui.add_space(12.0);
-        if nav_button(ui, app.active_panel == Panel::Settings, "⚙ Parametres", "").clicked() {
-            app.active_panel = Panel::Settings;
-        }
-        ui.add_space(8.0);
+        ui.add_space(20.0);
         draw_network_badge(ui, &app.network);
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new(format!("Mode {}", app.active_model))
+                .size(13.0)
+                .color(theme::TEXT_FAINT),
+        );
     });
 }
 
@@ -847,12 +826,194 @@ fn draw_logo_mark(ui: &mut egui::Ui, texture: &TextureHandle, size: f32, time: f
     }
 }
 
-fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    draw_aurora_background(
-        ui,
-        app.app_started.elapsed().as_secs_f32() + 2.0,
-        theme::PANEL,
+fn draw_icon(painter: &egui::Painter, center: Pos2, icon: IconKind, color: Color32, scale: f32) {
+    let stroke = Stroke::new(1.8, color);
+    match icon {
+        IconKind::Edit => {
+            painter.line_segment(
+                [
+                    center + Vec2::new(-7.0, 7.0) * scale,
+                    center + Vec2::new(6.0, -6.0) * scale,
+                ],
+                stroke,
+            );
+            painter.rect_stroke(
+                Rect::from_center_size(
+                    center + Vec2::new(-2.0, 2.0) * scale,
+                    Vec2::new(14.0, 14.0) * scale,
+                ),
+                egui::Rounding::same(2.0),
+                stroke,
+            );
+        }
+        IconKind::Upload => {
+            painter.line_segment(
+                [
+                    center + Vec2::new(0.0, -9.0) * scale,
+                    center + Vec2::new(0.0, 6.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(-6.0, -3.0) * scale,
+                    center + Vec2::new(0.0, -9.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(6.0, -3.0) * scale,
+                    center + Vec2::new(0.0, -9.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(-8.0, 9.0) * scale,
+                    center + Vec2::new(8.0, 9.0) * scale,
+                ],
+                stroke,
+            );
+        }
+        IconKind::Mic => {
+            painter.rect_stroke(
+                Rect::from_center_size(
+                    center + Vec2::new(0.0, -3.0) * scale,
+                    Vec2::new(9.0, 15.0) * scale,
+                ),
+                egui::Rounding::same(5.0),
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(-8.0, 0.0) * scale,
+                    center + Vec2::new(-8.0, 2.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(8.0, 0.0) * scale,
+                    center + Vec2::new(8.0, 2.0) * scale,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    center + Vec2::new(0.0, 5.0) * scale,
+                    center + Vec2::new(0.0, 11.0) * scale,
+                ],
+                stroke,
+            );
+        }
+        IconKind::Send => {
+            let points = vec![
+                center + Vec2::new(-9.0, -7.0) * scale,
+                center + Vec2::new(10.0, 0.0) * scale,
+                center + Vec2::new(-9.0, 7.0) * scale,
+                center + Vec2::new(-5.0, 0.0) * scale,
+            ];
+            painter.add(egui::Shape::closed_line(points, stroke));
+            painter.line_segment(
+                [
+                    center + Vec2::new(-5.0, 0.0) * scale,
+                    center + Vec2::new(4.0, 0.0) * scale,
+                ],
+                stroke,
+            );
+        }
+    }
+}
+
+fn icon_circle_button(
+    ui: &mut egui::Ui,
+    icon: IconKind,
+    fill: Color32,
+    icon_color: Color32,
+    hover: &str,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::click());
+    let painter = ui.painter_at(rect);
+    let bg = if response.hovered() {
+        lighten(fill, 1.08)
+    } else {
+        fill
+    };
+    painter.circle_filled(rect.center(), 20.0, bg);
+    painter.circle_stroke(rect.center(), 19.5, Stroke::new(1.0, theme::border()));
+    draw_icon(&painter, rect.center(), icon, icon_color, 1.0);
+    response.on_hover_text(hover)
+}
+
+fn nav_button_icon(
+    ui: &mut egui::Ui,
+    selected: bool,
+    icon: IconKind,
+    label: &str,
+    hover: &str,
+) -> egui::Response {
+    let fill = if selected {
+        theme::ACTIVE
+    } else {
+        theme::SURFACE
+    };
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 52.0), Sense::click());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, egui::Rounding::same(16.0), fill);
+    painter.rect_stroke(
+        rect.expand(if response.hovered() { 1.0 } else { 0.0 }),
+        egui::Rounding::same(16.0),
+        Stroke::new(
+            1.0,
+            if selected || response.hovered() {
+                theme::border_active()
+            } else {
+                theme::border()
+            },
+        ),
     );
+    draw_icon(
+        &painter,
+        rect.left_center() + Vec2::new(28.0, 0.0),
+        icon,
+        if response.hovered() {
+            theme::GOLD_HOVER
+        } else {
+            theme::TEXT_MUTED
+        },
+        0.9,
+    );
+    painter.text(
+        rect.left_center() + Vec2::new(54.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(16.0),
+        if selected {
+            theme::TEXT
+        } else {
+            theme::TEXT_MUTED
+        },
+    );
+    if !hover.is_empty() {
+        response.on_hover_text(hover)
+    } else {
+        response
+    }
+}
+
+fn lighten(color: Color32, factor: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        (color.r() as f32 * factor).min(255.0) as u8,
+        (color.g() as f32 * factor).min(255.0) as u8,
+        (color.b() as f32 * factor).min(255.0) as u8,
+        color.a(),
+    )
+}
+
+fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
+    ui.painter().rect_filled(ui.max_rect(), 0.0, theme::PANEL);
     ui.horizontal_centered(|ui| {
         ui.add_space(20.0);
         ui.label(
@@ -863,18 +1024,7 @@ fn draw_topbar(ui: &mut egui::Ui, app: &mut JarvisUi) {
         ui.label(RichText::new("• interface locale native").color(mut_text()));
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add_sized(
-                    [44.0, 38.0],
-                    egui::Button::new("🖥").rounding(egui::Rounding::same(18.0)),
-                )
-                .on_hover_text("Ouvrir le terminal - Ctrl+T")
-                .clicked()
-            {
-                app.open_terminal();
-            }
             draw_model_dropdown(ui, app);
-            draw_access_dropdown(ui, app);
             draw_network_badge(ui, &app.network);
         });
     });
@@ -949,14 +1099,16 @@ fn draw_message_aligned(ui: &mut egui::Ui, message: &ChatMessage) {
 
     let row_width = ui.available_width();
     let bubble_width = (row_width * width_ratio).min(CONTENT_MAX_WIDTH * width_ratio);
-    let side_gap = (row_width - bubble_width - 24.0).max(0.0);
+    let layout = if align_right {
+        Layout::right_to_left(Align::TOP)
+    } else {
+        Layout::left_to_right(Align::TOP)
+    };
 
-    ui.horizontal(|ui| {
-        if align_right {
-            ui.add_space(side_gap);
-        }
+    ui.with_layout(layout, |ui| {
+        ui.add_space(24.0);
         ui.vertical(|ui| {
-            ui.set_max_width(bubble_width);
+            ui.set_width(bubble_width);
             egui::Frame::none()
                 .fill(fill)
                 .stroke(Stroke::new(
@@ -970,7 +1122,7 @@ fn draw_message_aligned(ui: &mut egui::Ui, message: &ChatMessage) {
                 .rounding(egui::Rounding::same(14.0))
                 .inner_margin(egui::Margin::symmetric(16.0, 14.0))
                 .show(ui, |ui| {
-                    ui.set_max_width(bubble_width);
+                    ui.set_width(bubble_width - 32.0);
                     ui.label(RichText::new(label).size(13.0).strong().color(accent));
                     ui.add_space(6.0);
                     ui.label(
@@ -980,9 +1132,6 @@ fn draw_message_aligned(ui: &mut egui::Ui, message: &ChatMessage) {
                     );
                 });
         });
-        if !align_right {
-            ui.add_space(side_gap);
-        }
     });
 }
 
@@ -1110,7 +1259,7 @@ fn draw_empty_state(ui: &mut egui::Ui, text: &str) {
 }
 
 fn draw_composer_spec(ui: &mut egui::Ui, app: &mut JarvisUi) {
-    draw_aurora_background(ui, app.app_started.elapsed().as_secs_f32() + 5.0, theme::BG);
+    ui.painter().rect_filled(ui.max_rect(), 0.0, theme::BG);
     let max_width = ui.available_width().min(CONTENT_MAX_WIDTH);
     ui.add_space(if app.uploaded_files.is_empty() {
         14.0
@@ -1140,14 +1289,14 @@ fn draw_composer_spec(ui: &mut egui::Ui, app: &mut JarvisUi) {
             .show(ui, |ui| {
                 ui.set_height(56.0);
                 ui.horizontal_centered(|ui| {
-                    if ui
-                        .add_sized(
-                            [40.0, 40.0],
-                            egui::Button::new(RichText::new("+").size(20.0).strong())
-                                .rounding(egui::Rounding::same(20.0)),
-                        )
-                        .on_hover_text("Uploader un fichier - Ctrl+O")
-                        .clicked()
+                    if icon_circle_button(
+                        ui,
+                        IconKind::Upload,
+                        Color32::from_rgb(42, 44, 42),
+                        theme::TEXT,
+                        "Uploader un fichier - Ctrl+O",
+                    )
+                    .clicked()
                     {
                         app.open_upload_dialog();
                     }
@@ -1159,32 +1308,29 @@ fn draw_composer_spec(ui: &mut egui::Ui, app: &mut JarvisUi) {
                         .desired_width((ui.available_width() - 108.0).max(240.0));
                     ui.add(edit);
 
-                    let mic_label = if app.voice.is_recording() {
-                        "REC"
-                    } else {
-                        "MIC"
-                    };
-                    if ui
-                        .add_sized(
-                            [40.0, 40.0],
-                            egui::Button::new(RichText::new(mic_label).size(12.0).strong())
-                                .rounding(egui::Rounding::same(20.0)),
-                        )
-                        .on_hover_text("Enregistrer le micro - Ctrl+M")
-                        .clicked()
+                    if icon_circle_button(
+                        ui,
+                        IconKind::Mic,
+                        if app.voice.is_recording() {
+                            theme::OFFLINE
+                        } else {
+                            Color32::from_rgb(42, 44, 42)
+                        },
+                        theme::TEXT,
+                        "Enregistrer le micro - Ctrl+M",
+                    )
+                    .clicked()
                     {
                         app.toggle_microphone();
                     }
-                    if ui
-                        .add_sized(
-                            [40.0, 40.0],
-                            egui::Button::new(RichText::new("->").size(16.0).strong())
-                                .fill(theme::GOLD)
-                                .stroke(Stroke::new(1.0, theme::GOLD_HOVER))
-                                .rounding(egui::Rounding::same(20.0)),
-                        )
-                        .on_hover_text("Envoyer - Ctrl+Enter")
-                        .clicked()
+                    if icon_circle_button(
+                        ui,
+                        IconKind::Send,
+                        theme::GOLD,
+                        theme::BG,
+                        "Envoyer - Ctrl+Enter",
+                    )
+                    .clicked()
                     {
                         app.send_current_message();
                     }
@@ -1288,6 +1434,7 @@ fn draw_loading(ui: &mut egui::Ui, elapsed: f32) {
     );
 }
 
+#[allow(dead_code)]
 fn sidebar_action(ui: &mut egui::Ui, label: &str, shortcut: &str, mut action: impl FnMut()) {
     let display = if shortcut.is_empty() {
         label.to_string()
@@ -1299,6 +1446,7 @@ fn sidebar_action(ui: &mut egui::Ui, label: &str, shortcut: &str, mut action: im
     }
 }
 
+#[allow(dead_code)]
 fn nav_button(ui: &mut egui::Ui, selected: bool, label: &str, hover: &str) -> egui::Response {
     let fill = if selected {
         theme::ACTIVE
@@ -1336,6 +1484,7 @@ fn nav_button(ui: &mut egui::Ui, selected: bool, label: &str, hover: &str) -> eg
     response
 }
 
+#[allow(dead_code)]
 fn discussion_button(
     ui: &mut egui::Ui,
     app: &mut JarvisUi,
@@ -1351,8 +1500,8 @@ fn discussion_button(
 
 fn draw_model_dropdown(ui: &mut egui::Ui, app: &mut JarvisUi) {
     ComboBox::from_id_salt("model-dropdown")
-        .selected_text(format!("🤖 {}", app.active_model))
-        .width(152.0)
+        .selected_text(format!("Mode {}", app.active_model))
+        .width(118.0)
         .show_ui(ui, |ui| {
             for model in MODELS {
                 ui.selectable_value(&mut app.active_model, model.to_string(), model);
@@ -1685,6 +1834,299 @@ fn measure_network() -> NetworkStatus {
     }
 }
 
+fn jarvis_ai_summary(prompt: &str, tier: &str) -> String {
+    let config = ai_model_config(tier);
+    let key = match env::var(config.key_env) {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => {
+            return format!(
+                "{} est configure sur {}, mais {} est absent. Ajoute une cle regeneree dans l'environnement, jamais dans le code.",
+                config.tier, config.provider_label, config.key_env
+            );
+        }
+    };
+    let model = env::var(config.model_env).unwrap_or_else(|_| config.default_model.to_string());
+    let system = format!(
+        "Tu es Jarvis en mode {}. Reponds en francais, avec precision, sans mentionner les details internes de routage.",
+        config.tier
+    );
+
+    match config.provider_kind {
+        AiProviderKind::OpenAiCompatible => {
+            call_openai_compatible(&config, &key, &model, &system, prompt)
+        }
+        AiProviderKind::Gemini => call_gemini(&config, &key, &model, &system, prompt),
+        AiProviderKind::Anthropic => call_anthropic(&config, &key, &model, &system, prompt),
+    }
+}
+
+fn ai_model_config(tier: &str) -> AiModelConfig {
+    let normalized = tier.to_ascii_lowercase();
+    let provider_env = match normalized.as_str() {
+        "ultra" => "JARVIS_ULTRA_PROVIDER",
+        "x" => "JARVIS_X_PROVIDER",
+        _ => "JARVIS_FLASH_PROVIDER",
+    };
+    let default_provider = match normalized.as_str() {
+        "ultra" => "openrouter",
+        "x" => "deepseek",
+        _ => "gemini",
+    };
+    let provider = env::var(provider_env)
+        .unwrap_or_else(|_| default_provider.to_string())
+        .to_ascii_lowercase();
+    let tier_label = match normalized.as_str() {
+        "ultra" => "Ultra",
+        "x" => "X",
+        _ => "Flash",
+    };
+    let tier_model_env = match tier_label {
+        "Ultra" => "JARVIS_ULTRA_MODEL",
+        "X" => "JARVIS_X_MODEL",
+        _ => "JARVIS_FLASH_MODEL",
+    };
+
+    match provider.as_str() {
+        "groq" => AiModelConfig {
+            tier: tier_label.to_string(),
+            provider_label: "Groq",
+            provider_kind: AiProviderKind::OpenAiCompatible,
+            key_env: "GROQ_API_KEY",
+            model_env: tier_model_env,
+            default_model: "llama-3.1-8b-instant",
+            base_url: "https://api.groq.com/openai/v1",
+            max_output_tokens: if tier_label == "Flash" { 1024 } else { 2048 },
+        },
+        "deepseek" => AiModelConfig {
+            tier: tier_label.to_string(),
+            provider_label: "DeepSeek",
+            provider_kind: AiProviderKind::OpenAiCompatible,
+            key_env: "DEEPSEEK_API_KEY",
+            model_env: tier_model_env,
+            default_model: "deepseek-reasoner",
+            base_url: "https://api.deepseek.com",
+            max_output_tokens: 4096,
+        },
+        "claude" | "anthropic" => AiModelConfig {
+            tier: tier_label.to_string(),
+            provider_label: "Claude",
+            provider_kind: AiProviderKind::Anthropic,
+            key_env: "ANTHROPIC_API_KEY",
+            model_env: "JARVIS_CLAUDE_MODEL",
+            default_model: "claude-sonnet-4-5",
+            base_url: "https://api.anthropic.com/v1",
+            max_output_tokens: if tier_label == "Ultra" { 8192 } else { 4096 },
+        },
+        "openrouter" => AiModelConfig {
+            tier: tier_label.to_string(),
+            provider_label: "OpenRouter",
+            provider_kind: AiProviderKind::OpenAiCompatible,
+            key_env: "OPENROUTER_API_KEY",
+            model_env: tier_model_env,
+            default_model: "deepseek-v4-pro[1m]",
+            base_url: "https://openrouter.ai/api/v1",
+            max_output_tokens: 8192,
+        },
+        _ => AiModelConfig {
+            tier: tier_label.to_string(),
+            provider_label: "Gemini",
+            provider_kind: AiProviderKind::Gemini,
+            key_env: "GEMINI_API_KEY",
+            model_env: tier_model_env,
+            default_model: "gemini-flash-latest",
+            base_url: "https://generativelanguage.googleapis.com/v1beta",
+            max_output_tokens: if tier_label == "Flash" { 1024 } else { 4096 },
+        },
+    }
+}
+
+fn call_openai_compatible(
+    config: &AiModelConfig,
+    key: &str,
+    model: &str,
+    system: &str,
+    prompt: &str,
+) -> String {
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return format!("Client IA indisponible: {error}"),
+    };
+    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
+    let response = client
+        .post(url)
+        .bearer_auth(key)
+        .header("HTTP-Referer", "https://github.com/Alan-ESM/Jarvis")
+        .header("X-Title", "Jarvis Desktop")
+        .json(&serde_json::json!({
+            "model": model,
+            "messages": [
+                { "role": "system", "content": system },
+                { "role": "user", "content": prompt }
+            ],
+            "temperature": 0.35,
+            "max_tokens": config.max_output_tokens
+        }))
+        .send();
+    parse_openai_compatible_response(response)
+}
+
+fn parse_openai_compatible_response(
+    response: Result<reqwest::blocking::Response, reqwest::Error>,
+) -> String {
+    let Ok(response) = response else {
+        return "Appel IA impossible: verifie la connexion Internet.".to_string();
+    };
+    let status = response.status();
+    let body = match response.text() {
+        Ok(body) => body,
+        Err(error) => return format!("Reponse IA illisible: {error}"),
+    };
+    if !status.is_success() {
+        return format!(
+            "Provider IA refuse la requete: HTTP {}. {}",
+            status,
+            preview_text(&body, 320)
+        );
+    }
+    let value: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(error) => return format!("JSON IA illisible: {error}"),
+    };
+    value
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(|content| content.as_str())
+        .map(str::trim)
+        .filter(|content| !content.is_empty())
+        .unwrap_or("Le provider IA a repondu sans contenu exploitable.")
+        .to_string()
+}
+
+fn call_gemini(
+    config: &AiModelConfig,
+    key: &str,
+    model: &str,
+    system: &str,
+    prompt: &str,
+) -> String {
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return format!("Client Gemini indisponible: {error}"),
+    };
+    let url = format!("{}/models/{}:generateContent", config.base_url, model);
+    let response = client
+        .post(url)
+        .header("X-goog-api-key", key)
+        .json(&serde_json::json!({
+            "systemInstruction": { "parts": [{ "text": system }] },
+            "contents": [{ "parts": [{ "text": prompt }] }],
+            "generationConfig": {
+                "temperature": 0.35,
+                "maxOutputTokens": config.max_output_tokens
+            }
+        }))
+        .send();
+    let Ok(response) = response else {
+        return "Appel Gemini impossible: verifie la connexion Internet.".to_string();
+    };
+    let status = response.status();
+    let body = match response.text() {
+        Ok(body) => body,
+        Err(error) => return format!("Reponse Gemini illisible: {error}"),
+    };
+    if !status.is_success() {
+        return format!(
+            "Gemini refuse la requete: HTTP {}. {}",
+            status,
+            preview_text(&body, 320)
+        );
+    }
+    let value: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(error) => return format!("JSON Gemini illisible: {error}"),
+    };
+    value
+        .get("candidates")
+        .and_then(|candidates| candidates.get(0))
+        .and_then(|candidate| candidate.get("content"))
+        .and_then(|content| content.get("parts"))
+        .and_then(|parts| parts.get(0))
+        .and_then(|part| part.get("text"))
+        .and_then(|text| text.as_str())
+        .map(str::trim)
+        .filter(|content| !content.is_empty())
+        .unwrap_or("Gemini a repondu sans contenu exploitable.")
+        .to_string()
+}
+
+fn call_anthropic(
+    config: &AiModelConfig,
+    key: &str,
+    model: &str,
+    system: &str,
+    prompt: &str,
+) -> String {
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return format!("Client Claude indisponible: {error}"),
+    };
+    let url = format!("{}/messages", config.base_url);
+    let response = client
+        .post(url)
+        .header("x-api-key", key)
+        .header("anthropic-version", "2023-06-01")
+        .json(&serde_json::json!({
+            "model": model,
+            "system": system,
+            "messages": [{ "role": "user", "content": prompt }],
+            "temperature": 0.35,
+            "max_tokens": config.max_output_tokens
+        }))
+        .send();
+    let Ok(response) = response else {
+        return "Appel Claude impossible: verifie la connexion Internet.".to_string();
+    };
+    let status = response.status();
+    let body = match response.text() {
+        Ok(body) => body,
+        Err(error) => return format!("Reponse Claude illisible: {error}"),
+    };
+    if !status.is_success() {
+        return format!(
+            "Claude refuse la requete: HTTP {}. {}",
+            status,
+            preview_text(&body, 320)
+        );
+    }
+    let value: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(error) => return format!("JSON Claude illisible: {error}"),
+    };
+    value
+        .get("content")
+        .and_then(|content| content.as_array())
+        .and_then(|parts| {
+            parts
+                .iter()
+                .find_map(|part| part.get("text").and_then(|text| text.as_str()))
+        })
+        .map(str::trim)
+        .filter(|content| !content.is_empty())
+        .unwrap_or("Claude a repondu sans contenu exploitable.")
+        .to_string()
+}
+
 fn transcribe_recording(path: &PathBuf) -> String {
     let token = match env::var("HUGGINGFACE_API_TOKEN") {
         Ok(value) if !value.trim().is_empty() => value,
@@ -1814,6 +2256,7 @@ fn preview_text(text: &str, max_chars: usize) -> String {
     preview
 }
 
+#[allow(dead_code)]
 fn google_search_summary(query: &str) -> String {
     let api_key = match env::var("GOOGLE_SEARCH_API_KEY") {
         Ok(value) if !value.trim().is_empty() => value,
